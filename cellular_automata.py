@@ -31,6 +31,8 @@ class Grid:
             grid.append(row)
 
         return grid
+
+
 def printGrid(grid):
     for i in range(len(grid)):
         print('')
@@ -38,52 +40,68 @@ def printGrid(grid):
     for row in grid:
         print(' '.join(str(i) for i in row))
 
+
 class Simulation:
-    def __init__(self, gridArr, alive, dead):
+    def __init__(self, gridArr, alive, dead, ruleset):
         self.grid = gridArr
         self.rows = len(self.grid)
         self.cols = len(self.grid[0])
-        self.alive = 1
-        self.dead = 0
+        self.alive = alive
+        self.dead = dead
+        self.birth_rules = ruleset[0]
+        self.survival_rules = ruleset[1]
+
 
     def countliveneighbours(self, cell_x, cell_y):
-            count = 0
+        count = 0
 
-            for i in [-1, 0, 1]:
-                for j in [-1, 0, 1]:
-                    if self.grid[(cell_y + i) % self.rows][(cell_x + j) % self.cols] > self.dead:
-                        count += 1
+        for i in [-1, 0, 1]:
+            for j in [-1, 0, 1]:
+                if self.grid[(cell_y + i) % self.rows][(cell_x + j) % self.cols] > self.dead:
+                    count += 1
 
-            if self.grid[cell_y][cell_x] > self.dead:
-                count -= 1
+        if self.grid[cell_y][cell_x] > self.dead:
+            count -= 1
 
-            return count
+        return count
 
     def step(self):
 
         new_grid = copy.deepcopy(self.grid)
 
-        for y in range(self.rows):
-            for x in range(self.cols):
+        for cell_y in range(self.rows):
+            for cell_x in range(self.cols):
 
-                isAlive = self.grid[y][x] > self.dead
-                live_neighbours = self.countliveneighbours(x, y)
+                isAlive = self.grid[cell_y][cell_x] > self.dead
+                live_neighbours = self.countliveneighbours(cell_x, cell_y)
+
+                # if isAlive:
+                #
+                #     if live_neighbours == 2 or live_neighbours == 3:
+                #         new_grid[cell_y][cell_x] = self.grid[cell_y][cell_x] + 1
+                #
+                #     else:
+                #         new_grid[cell_y][cell_x] = self.dead
+                #
+                # else:
+                #
+                #     if live_neighbours == 3:
+                #         new_grid[cell_y][cell_x] = self.alive
+                #
+                #     else:
+                #         new_grid[cell_y][cell_x] = self.dead
 
                 if isAlive:
 
-                    if live_neighbours == 2 or live_neighbours == 3:
-                        new_grid[y][x] = self.grid[y][x] + 1
+                    if live_neighbours in self.survival_rules:
+                        new_grid[cell_y][cell_x] = self.grid[cell_y][cell_x] + 1
 
                     else:
-                        new_grid[y][x] = self.dead
+                        new_grid[cell_y][cell_x] = self.dead
 
                 else:
-
-                    if live_neighbours == 3:
-                        new_grid[y][x] = self.alive
-
-                    else:
-                        new_grid [y][x] = self.dead
+                    if live_neighbours in self.birth_rules:
+                        new_grid[cell_y][cell_x] = self.grid[cell_y][cell_x] + 1
 
         return new_grid
 
@@ -131,9 +149,12 @@ arena = Grid(50, 50)
 screen = pygame.display.set_mode((arena.cols * CELL_SIZE, arena.rows * CELL_SIZE))
 pygame.display.set_caption("yep")
 
+rules = [
+    {1, 3},
+    {2, 3}
+]
 play = arena.genEmptyGrid()
-game = Simulation(play, 1, 0)
-
+game = Simulation(play, 1, 0, rules)
 
 # play[3][5] = arena.alive
 # play[4][5] = arena.alive
@@ -153,9 +174,6 @@ while running:
         game.grid = game.step()
         pygame.time.wait(100)
 
-    # displayGrid(play)
-    # play = step2(play)
-
     for event in pygame.event.get():
 
         if event.type == pygame.KEYDOWN:
@@ -165,6 +183,12 @@ while running:
                 else:
                     playing = True
                 press_count += 1
+
+            if event.key == pygame.K_r:
+                game.grid = arena.genEmptyGrid()
+
+            if event.key == pygame.K_s:
+                game.grid = game.step()
 
         elif pygame.mouse.get_pressed():
             x, y = pygame.mouse.get_pos()
