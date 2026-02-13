@@ -1,6 +1,8 @@
 import copy
 import pygame
 import math
+import matplotlib.pyplot as plt
+import numpy as np
 
 CELL_SIZE = 20
 ALIVE_COLOR = [255, 0, 0]
@@ -16,6 +18,7 @@ TEXT_COLOR = (0, 0, 0)
 pygame.init()
 
 font = pygame.font.Font('cmunbi.ttf', 32)
+
 
 class Grid:
     def __init__(self, cols, rows):
@@ -142,8 +145,8 @@ class Simulation:
                                                  WIDTH - OUTLINE_THICKNESS, HEIGHT - OUTLINE_THICKNESS))
 
     def setCellAtPos(self, state, x, y):
-        cell_x = min(math.floor((x - SIM_POS[0]) / CELL_SIZE), self.cols - 1)
-        cell_y = min(math.floor((y - SIM_POS[1]) / CELL_SIZE), self.rows - 1)
+        cell_x = min(math.floor((x - SIM_POS[0]) / CELL_SIZE), self.rows - 1)
+        cell_y = min(math.floor((y - SIM_POS[1]) / CELL_SIZE), self.cols - 1)
 
         self.grid[cell_x][cell_y] = state
 
@@ -152,6 +155,7 @@ class Simulation:
         dead_cell_count = 0
         avg_age_alive = 0
         avg_age_dead = 0
+        percent_live_cells = 0
 
         for cell_y in range(self.rows):
             for cell_x in range(self.cols):
@@ -167,6 +171,8 @@ class Simulation:
                     dead_cell_count += 1
                     avg_age_dead += self.grid[cell_y][cell_x]
 
+        percent_live_cells = (alive_cell_count / (self.rows * self.cols )) * 100
+
         if alive_cell_count == 0:
             avg_age_alive = 0
         else:
@@ -174,7 +180,7 @@ class Simulation:
 
         avg_age_dead /= self.rows * self.cols
 
-        return alive_cell_count, dead_cell_count, avg_age_alive, avg_age_dead
+        return alive_cell_count, dead_cell_count, avg_age_alive, avg_age_dead, percent_live_cells
 
     def reset(self):
         for cell_y in range(self.rows):
@@ -183,18 +189,27 @@ class Simulation:
 
 
 
-arena = Grid(25, 25)
-
-screen = pygame.display.set_mode((arena.cols * CELL_SIZE + 300, arena.rows * CELL_SIZE + 300))
-screen.fill(BG_COLOR)
-pygame.display.set_caption("yep")
+arena = Grid(30, 50)
 
 rules = [
-    {2, 3},
+    {3},
     {2, 3}
 ]
 play = arena.genEmptyGrid()
 game = Simulation(play, 1, 0, rules)
+
+screen_height = game.rows * CELL_SIZE + 300
+screen_width = game.cols * CELL_SIZE + 300
+under_screen = game.rows * CELL_SIZE * (2/3)
+
+spacing = 40
+text_order = []
+for i in range(10):
+    text_order.append(i * spacing + under_screen)
+
+screen = pygame.display.set_mode((screen_height, screen_width))
+screen.fill(BG_COLOR)
+pygame.display.set_caption("yep")
 
 # play[3][5] = arena.alive
 # play[4][5] = arena.alive
@@ -212,31 +227,37 @@ while running:
     stats = game.statistics()
     alive_count = stats[0]
     dead_count = stats[1]
-    avg_age_alive = stats[2]
-    avg_age_dead = stats[3]
+    avg_age_alive = round(stats[2], 2)
+    avg_age_dead = round(stats[3], 2)
+    percent_alive = round(stats[4], 2)
 
     # blank_text = font.render('', True, TEXT_COLOR, BG_COLOR)
 
     alive_count_text = font.render(('Alive cells: ' + str(alive_count)), True, TEXT_COLOR, BG_COLOR)
     alive_count_textRect = alive_count_text.get_rect()
-    alive_count_textRect.topleft = (SIM_POS[0], 550)
+    alive_count_textRect.topleft = (SIM_POS[0], text_order[0])
 
     dead_count_text = font.render(('Dead cells: ' + str(dead_count)), True, TEXT_COLOR, BG_COLOR)
     dead_count_textRect = dead_count_text.get_rect()
-    dead_count_textRect.topleft = (SIM_POS[0], 590)
+    dead_count_textRect.topleft = (SIM_POS[0], text_order[1])
 
     avg_age_alive_text = font.render(('Average cell age: ' + str(avg_age_alive)), True, TEXT_COLOR, BG_COLOR)
     avg_age_alive_textRect = avg_age_alive_text.get_rect()
-    avg_age_alive_textRect.topleft = (SIM_POS[0], 630)
+    avg_age_alive_textRect.topleft = (SIM_POS[0], text_order[2])
 
     avg_age_dead_text = font.render(('Average cell age w/ dead cells: ' + str(avg_age_dead)), True, TEXT_COLOR, BG_COLOR)
     avg_age_dead_textRect = avg_age_dead_text.get_rect()
-    avg_age_dead_textRect.topleft = (SIM_POS[0], 670)
+    avg_age_dead_textRect.topleft = (SIM_POS[0], text_order[3])
+
+    percent_alive_text = font.render('Percentage of alive cells: ' + str(percent_alive) + '%', True, TEXT_COLOR, BG_COLOR)
+    percent_alive_textRect = percent_alive_text.get_rect()
+    percent_alive_textRect.topleft = (SIM_POS[0], text_order[4])
 
     screen.blit(alive_count_text, alive_count_textRect)
     screen.blit(dead_count_text, dead_count_textRect)
     screen.blit(avg_age_alive_text, avg_age_alive_textRect)
     screen.blit(avg_age_dead_text, avg_age_dead_textRect)
+    screen.blit(percent_alive_text, percent_alive_textRect)
 
     game.displayGrid()
     pygame.display.update()
