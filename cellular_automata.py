@@ -1,7 +1,6 @@
 import copy
 import pygame
 import math
-import matplotlib.pyplot as plt
 import numpy as np
 
 CELL_SIZE = 20
@@ -14,10 +13,10 @@ DARKENING_FACTOR = 1.1
 SIM_POS = (50, 50)
 BG_COLOR = (160, 160, 160)
 TEXT_COLOR = (0, 0, 0)
-
 pygame.init()
 
 font = pygame.font.Font('cmunbi.ttf', 32)
+small_font = pygame.font.Font('cmunbi.ttf', 16)
 
 
 class Grid:
@@ -117,8 +116,8 @@ class Simulation:
         for i in range(self.rows):
             for j in range(self.cols):
 
-                TOP = j * CELL_SIZE + SIM_POS[0]
-                LEFT = i * CELL_SIZE+ SIM_POS[1]
+                TOP = i * CELL_SIZE + SIM_POS[0]
+                LEFT = j * CELL_SIZE+ SIM_POS[1]
                 WIDTH = CELL_SIZE
                 HEIGHT = CELL_SIZE
                 AGE = self.grid[i][j]
@@ -145,10 +144,10 @@ class Simulation:
                                                  WIDTH - OUTLINE_THICKNESS, HEIGHT - OUTLINE_THICKNESS))
 
     def setCellAtPos(self, state, x, y):
-        cell_x = min(math.floor((x - SIM_POS[0]) / CELL_SIZE), self.rows - 1)
-        cell_y = min(math.floor((y - SIM_POS[1]) / CELL_SIZE), self.cols - 1)
+        cell_x = min(math.floor((x - SIM_POS[0]) / CELL_SIZE), self.cols - 1)
+        cell_y = min(math.floor((y - SIM_POS[1]) / CELL_SIZE), self.rows - 1)
 
-        self.grid[cell_x][cell_y] = state
+        self.grid[cell_y][cell_x] = state
 
     def statistics(self):
         alive_cell_count = 0
@@ -188,8 +187,104 @@ class Simulation:
                 self.grid[cell_y][cell_x] = self.dead
 
 
+def shiftPointByPoint(pShifted, pReference):
+    point = (
+        pReference[0] + pShifted[0],
+        pReference[1] - pShifted[1]
+    )
+    return point
 
-arena = Grid(30, 50)
+def shiftPointByCoords(point, xShift, yShift):
+    new_point = (
+        point[0] + xShift,
+        point[1] + yShift
+    )
+    return new_point
+
+
+def multiplyPointByNumbers(point, xMulti, yMulti):
+    new_point = (
+        point[0] * xMulti,
+        point[1] * yMulti
+    )
+    return new_point
+
+
+def drawMarkerAtPoint(surf, orientation, length, point):
+    thickness = 3
+
+    if orientation == 'vertical':
+        pygame.draw.line(surf, (0, 0, 0), shiftPointByCoords(point, 0, length), shiftPointByCoords(point, 0, -length), thickness)
+    elif orientation == 'horizontal':
+        pygame.draw.line(surf, (0, 0, 0), shiftPointByCoords(point, -length, 0), shiftPointByCoords(point, length, 0), thickness)
+
+
+def drawPlotAtPos(surf, stat, xPointSet, yPointSet, plot_pos, width, height, dec_x, dec_y):
+    corner_bl = (plot_pos[0], plot_pos[1] + height)
+    corner_br = (plot_pos[0] + width, plot_pos[1] + height)
+    corner_tl = plot_pos
+    unit_x = 50
+    unit_y = 5
+
+    x_marker_amount = 10
+    step_x = width / x_marker_amount
+
+    y_marker_amount = 6
+    step_y = height / y_marker_amount
+
+    pointSet = [(xPointSet[i], yPointSet[i]) for i in range(len(xPointSet))]
+    xCorSet = [i[0] for i in pointSet]
+    yCorSet = [i[1] for i in pointSet]
+
+    if max(yCorSet) * unit_y > height:
+        unit_y = height / max(yCorSet)
+
+    if max(xCorSet) * unit_x > width:
+        unit_x = math.floor(width / (max(xCorSet)))
+
+    pygame.draw.rect(surf, (255, 255, 255), pygame.Rect(plot_pos[0], plot_pos[1], width, height))
+
+    pygame.draw.line(surf, (0, 0, 0), corner_bl, corner_br, 7)
+    pygame.draw.line(surf, (0, 0, 0), corner_bl, corner_tl, 7)
+
+    for i in range(x_marker_amount + 1):
+        marker_pos = shiftPointByPoint((step_x * i, 0), corner_bl)
+        placeholder = step_x / unit_x
+
+        drawMarkerAtPoint(screen, 'vertical', 9, marker_pos)
+
+        marker_text = small_font.render(str(round(placeholder * i, dec_x)), True, TEXT_COLOR, BG_COLOR)
+        markertextRect = marker_text.get_rect()
+        markertextRect.topleft = shiftPointByCoords(marker_pos, -4, 10)
+        surf.blit(marker_text, markertextRect)
+
+    for i in range(y_marker_amount + 1):
+        marker_pos = shiftPointByPoint((0, step_y * i), corner_bl)
+        placeholder = step_y / unit_y
+
+        drawMarkerAtPoint(screen, 'horizontal', 9, marker_pos)
+
+        marker_text = small_font.render(str(round(placeholder * i, dec_y)), True, TEXT_COLOR, BG_COLOR)
+        markertextRect = marker_text.get_rect()
+        markertextRect.topleft = shiftPointByCoords(marker_pos, -38 - 7 * math.log(round(placeholder * i, dec_y) + 1, 10), -12)
+        surf.blit(marker_text, markertextRect)
+
+    caption_text = small_font.render(str(stat), True, TEXT_COLOR, BG_COLOR)
+    caption_textRect = caption_text.get_rect()
+    caption_textRect.topleft = shiftPointByCoords(corner_tl, 0, -25)
+    surf.blit(caption_text, caption_textRect)
+
+    for i in range(len(pointSet) - 1):
+        p1 = multiplyPointByNumbers(pointSet[i], unit_x, unit_y)
+        p2 = multiplyPointByNumbers(pointSet[i + 1], unit_x, unit_y)
+
+        shifted_p1 = shiftPointByPoint(p1, corner_bl)
+        shifted_p2 = shiftPointByPoint(p2, corner_bl)
+
+        pygame.draw.line(surf, (0, 0, 0), shifted_p1, shifted_p2, 2)
+
+
+arena = Grid(40, 40)
 
 rules = [
     {3},
@@ -199,15 +294,20 @@ play = arena.genEmptyGrid()
 game = Simulation(play, 1, 0, rules)
 
 screen_height = game.rows * CELL_SIZE + 300
-screen_width = game.cols * CELL_SIZE + 300
-under_screen = game.rows * CELL_SIZE * (2/3)
+screen_width = game.cols * CELL_SIZE + 700
+under_sim = game.rows * CELL_SIZE + 50
+next_to_sim = 130 + game.cols * CELL_SIZE
 
-spacing = 40
 text_order = []
-for i in range(10):
-    text_order.append(i * spacing + under_screen)
+plot_order = []
 
-screen = pygame.display.set_mode((screen_height, screen_width))
+for i in range(10):
+    text_order.append(i * 40 + under_sim)
+    plot_order.append(i * 250 + 50)
+
+
+
+screen = pygame.display.set_mode((screen_width, screen_height))
 screen.fill(BG_COLOR)
 pygame.display.set_caption("yep")
 
@@ -217,8 +317,18 @@ pygame.display.set_caption("yep")
 # play[3][4] = arena.alive
 
 running = True
-playing = True
+playing = False
 press_count = 0
+generation = 0
+
+alive_y = []
+dead_y = []
+avg_age_alive_y = []
+avg_age_dead_y = []
+percent_alive_y = []
+generation_x = []
+
+printGrid(play)
 
 while running:
 
@@ -230,6 +340,13 @@ while running:
     avg_age_alive = round(stats[2], 2)
     avg_age_dead = round(stats[3], 2)
     percent_alive = round(stats[4], 2)
+
+    generation_x.append(generation)
+    alive_y.append(alive_count)
+    dead_y.append(dead_count)
+    avg_age_alive_y.append(avg_age_alive)
+    avg_age_dead_y.append(avg_age_dead)
+    percent_alive_y.append(percent_alive)
 
     # blank_text = font.render('', True, TEXT_COLOR, BG_COLOR)
 
@@ -259,19 +376,23 @@ while running:
     screen.blit(avg_age_dead_text, avg_age_dead_textRect)
     screen.blit(percent_alive_text, percent_alive_textRect)
 
+    drawPlotAtPos(screen, 'Alive cell count by generation', generation_x, alive_y, (next_to_sim, plot_order[0]), 500, 200, 0, 0)
+    drawPlotAtPos(screen, 'Percent of alive cells', generation_x, percent_alive_y, (next_to_sim, plot_order[1]), 500, 200, 0, 0)
+    drawPlotAtPos(screen, 'Average cell age by generation', generation_x, avg_age_alive_y, (next_to_sim, plot_order[2]), 500, 200, 0, 0)
+
     game.displayGrid()
     pygame.display.update()
 
-
     if playing:
         game.grid = game.step()
-        pygame.time.wait(100)
+        generation += 1
+        pygame.time.wait(20)
 
     for event in pygame.event.get():
 
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_SPACE:
-                if press_count % 2 == 0:
+                if press_count % 2 == 1:
                     playing = False
                 else:
                     playing = True
