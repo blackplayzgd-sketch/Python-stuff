@@ -3,7 +3,7 @@ import pygame
 import math
 import numpy as np
 
-CELL_SIZE = 20
+CELL_SIZE = 10
 ALIVE_COLOR = [255, 0, 0]
 ALIVE_OUTLINE = [180, 0, 0]
 OUTLINE_THICKNESS = CELL_SIZE * 0.1
@@ -17,6 +17,7 @@ pygame.init()
 
 font = pygame.font.Font('cmunbi.ttf', 32)
 small_font = pygame.font.Font('cmunbi.ttf', 16)
+medium_font = pygame.font.Font('cmunbi.ttf', 24)
 
 
 class Grid:
@@ -47,6 +48,28 @@ def printGrid(grid):
         print(' '.join(str(i) for i in row))
 
 
+def convRules(ruleString):
+    birth_string = ruleString.split('/')[0]
+    survival_string = ruleString.split('/')[1]
+
+    birth = birth_string.lstrip()
+    survival = survival_string.lstrip()
+
+    birth_list = []
+    survival_list = []
+
+    for i in birth:
+        if i.isdigit():
+            birth_list.append(int(i))
+    for i in survival:
+        if i.isdigit():
+            survival_list.append(int(i))
+
+    return birth_list, survival_list
+
+
+
+
 class Simulation:
     def __init__(self, gridArr, alive, dead, ruleset):
         self.grid = gridArr
@@ -54,9 +77,10 @@ class Simulation:
         self.cols = len(self.grid[0])
         self.alive = alive
         self.dead = dead
-        self.birth_rules = ruleset[0]
-        self.survival_rules = ruleset[1]
-
+        self.ruleset = ruleset
+        self.birth_rules = convRules(self.ruleset)[0]
+        self.survival_rules = convRules(self.ruleset)[1]
+        self.generation = 0
 
     def countliveneighbours(self, cell_x, cell_y):
         count = 0
@@ -71,9 +95,13 @@ class Simulation:
 
         return count
 
+    def updateRules(self):
+        self.birth_rules = convRules(self.ruleset)[0]
+        self.survival_rules = convRules(self.ruleset)[1]
+
     def step(self):
 
-        new_grid = copy.deepcopy(self.grid)
+        new_grid = [row[:] for row in self.grid]
 
         for cell_y in range(self.rows):
             for cell_x in range(self.cols):
@@ -108,6 +136,7 @@ class Simulation:
                 else:
                     if live_neighbours in self.birth_rules:
                         new_grid[cell_y][cell_x] = self.grid[cell_y][cell_x] + 1
+        self.generation += 1
 
         return new_grid
 
@@ -117,7 +146,7 @@ class Simulation:
             for j in range(self.cols):
 
                 TOP = i * CELL_SIZE + SIM_POS[0]
-                LEFT = j * CELL_SIZE+ SIM_POS[1]
+                LEFT = j * CELL_SIZE + SIM_POS[1]
                 WIDTH = CELL_SIZE
                 HEIGHT = CELL_SIZE
                 AGE = self.grid[i][j]
@@ -154,7 +183,7 @@ class Simulation:
         dead_cell_count = 0
         avg_age_alive = 0
         avg_age_dead = 0
-        percent_live_cells = 0
+        rule_set = self.ruleset
 
         for cell_y in range(self.rows):
             for cell_x in range(self.cols):
@@ -170,7 +199,7 @@ class Simulation:
                     dead_cell_count += 1
                     avg_age_dead += self.grid[cell_y][cell_x]
 
-        percent_live_cells = (alive_cell_count / (self.rows * self.cols )) * 100
+        percent_live_cells = (alive_cell_count / (self.rows * self.cols)) * 100
 
         if alive_cell_count == 0:
             avg_age_alive = 0
@@ -179,9 +208,11 @@ class Simulation:
 
         avg_age_dead /= self.rows * self.cols
 
-        return alive_cell_count, dead_cell_count, avg_age_alive, avg_age_dead, percent_live_cells
+        return alive_cell_count, dead_cell_count, avg_age_alive, avg_age_dead, percent_live_cells, rule_set
 
     def reset(self):
+        self.generation = 0
+
         for cell_y in range(self.rows):
             for cell_x in range(self.cols):
                 self.grid[cell_y][cell_x] = self.dead
@@ -193,6 +224,7 @@ def shiftPointByPoint(pShifted, pReference):
         pReference[1] - pShifted[1]
     )
     return point
+
 
 def shiftPointByCoords(point, xShift, yShift):
     new_point = (
@@ -209,6 +241,127 @@ def multiplyPointByNumbers(point, xMulti, yMulti):
     )
     return new_point
 
+class Button:
+    def __init__(self, surf, text, color, pos, width, height):
+        self.surf = surf
+        self.text = text
+        self.pos = pos
+        self.color = color
+        self.width = width
+        self.height = height
+
+        self.center = (self.pos[0] + self.width / 2, self.pos[1] + self.height / 2)
+
+    def drawButton(self):
+        pygame.draw.rect(self.surf, (0, 0, 0), pygame.Rect(self.pos, (self.width, self.height)))
+        pygame.draw.rect(self.surf, self.color, pygame.Rect(shiftPointByCoords(self.pos, 3, 3), (self.width - 6, self.height - 6)))
+
+        button_text = medium_font.render(self.text, True, TEXT_COLOR, self.color)
+        button_textRect = button_text.get_rect()
+        button_textRect.center = self.center
+        self.surf.blit(button_text, button_textRect)
+
+    def isClicked(self, cursor_x, cursor_y, isMouseClicked):
+        clicked = False
+
+        right_bound = self.pos[0] + self.width
+        left_bound = self.pos[0]
+
+        bottom_bound = self.pos[1] + self.height
+        top_bound = self.pos[1]
+
+        if isMouseClicked:
+            if left_bound < cursor_x < right_bound:
+                if top_bound < cursor_y < bottom_bound:
+                    clicked = True
+
+        return clicked
+
+
+class Plotter:
+    def __init__(self, surf):
+        self.surface = surf
+
+    def drawMarkerAtPoint(self, orientation, length, point):
+        thickness = 3
+
+        if orientation == 'vertical':
+            pygame.draw.line(self.surface, (0, 0, 0), shiftPointByCoords(point, 0, length),
+                             shiftPointByCoords(point, 0, -length), thickness)
+        elif orientation == 'horizontal':
+            pygame.draw.line(self.surface, (0, 0, 0), shiftPointByCoords(point, -length, 0),
+                             shiftPointByCoords(point, length, 0), thickness)
+
+    def drawMarkerText(self, text, pos):
+        marker_text = small_font.render(text, True, TEXT_COLOR, BG_COLOR)
+        markertextRect = marker_text.get_rect()
+        markertextRect.topleft = pos
+        self.surface.blit(marker_text, markertextRect)
+
+    def drawCaption(self, caption, pos):
+        caption_text = small_font.render(caption, True, TEXT_COLOR, BG_COLOR)
+        caption_textRect = caption_text.get_rect()
+        caption_textRect.topleft = pos
+        self.surface.blit(caption_text, caption_textRect)
+
+    def drawPlotAtPos(self, stat, xPointSet, yPointSet, plot_pos, width, height, dec_x, dec_y):
+        corner_bl = (plot_pos[0], plot_pos[1] + height)
+        corner_br = (plot_pos[0] + width, plot_pos[1] + height)
+        corner_tl = plot_pos
+        unit_x = 50
+        unit_y = 5
+
+        x_marker_amount = 10
+        step_x = width / x_marker_amount
+
+        y_marker_amount = 6
+        step_y = height / y_marker_amount
+
+        pointSet = [(xPointSet[i], yPointSet[i]) for i in range(len(xPointSet))]
+        xCorSet = [i[0] for i in pointSet]
+        yCorSet = [i[1] for i in pointSet]
+
+        if max(yCorSet) * unit_y > height:
+            unit_y = height / max(yCorSet)
+
+        if max(xCorSet) * unit_x > width:
+            unit_x = width / (max(xCorSet))
+
+        pygame.draw.rect(self.surface, (255, 255, 255), pygame.Rect(plot_pos[0], plot_pos[1], width, height))
+
+        pygame.draw.line(self.surface, (0, 0, 0), corner_bl, corner_br, 7)
+        pygame.draw.line(self.surface, (0, 0, 0), corner_bl, corner_tl, 7)
+
+        for i in range(x_marker_amount + 1):
+            marker_pos = shiftPointByPoint((step_x * i, 0), corner_bl)
+            placeholder = step_x / unit_x
+            text = str(round(placeholder * i, dec_x))
+            text_pos = shiftPointByCoords(marker_pos, -4, 10)
+
+            drawMarkerAtPoint(screen, 'vertical', 9, marker_pos)
+            drawMarkerText(screen, text, text_pos)
+
+        for i in range(y_marker_amount + 1):
+            marker_pos = shiftPointByPoint((0, step_y * i), corner_bl)
+            placeholder = step_y / unit_y
+            text = str(round(placeholder * i, dec_y))
+            text_pos = shiftPointByCoords(marker_pos, -38 - 7 * math.log(round(placeholder * i, dec_y) + 1, 10), -12)
+
+            drawMarkerAtPoint(screen, 'horizontal', 9, marker_pos)
+            drawMarkerText(screen, text, text_pos)
+
+        drawCaption(screen, str(stat), shiftPointByCoords(corner_tl, 0, -25))
+
+        for i in range(len(pointSet) - 1):
+            p1 = multiplyPointByNumbers(pointSet[i], unit_x, unit_y)
+            p2 = multiplyPointByNumbers(pointSet[i + 1], unit_x, unit_y)
+
+            shifted_p1 = shiftPointByPoint(p1, corner_bl)
+            shifted_p2 = shiftPointByPoint(p2, corner_bl)
+
+            pygame.draw.line(self.surface, (0, 0, 0), shifted_p1, shifted_p2, 2)
+
+
 
 def drawMarkerAtPoint(surf, orientation, length, point):
     thickness = 3
@@ -217,6 +370,19 @@ def drawMarkerAtPoint(surf, orientation, length, point):
         pygame.draw.line(surf, (0, 0, 0), shiftPointByCoords(point, 0, length), shiftPointByCoords(point, 0, -length), thickness)
     elif orientation == 'horizontal':
         pygame.draw.line(surf, (0, 0, 0), shiftPointByCoords(point, -length, 0), shiftPointByCoords(point, length, 0), thickness)
+
+
+def drawMarkerText(surf, text, pos):
+    marker_text = small_font.render(text, True, TEXT_COLOR, BG_COLOR)
+    markertextRect = marker_text.get_rect()
+    markertextRect.topleft = pos
+    surf.blit(marker_text, markertextRect)
+
+def drawCaption(surf, caption, pos):
+    caption_text = small_font.render(caption, True, TEXT_COLOR, BG_COLOR)
+    caption_textRect = caption_text.get_rect()
+    caption_textRect.topleft = pos
+    surf.blit(caption_text, caption_textRect)
 
 
 def drawPlotAtPos(surf, stat, xPointSet, yPointSet, plot_pos, width, height, dec_x, dec_y):
@@ -240,7 +406,7 @@ def drawPlotAtPos(surf, stat, xPointSet, yPointSet, plot_pos, width, height, dec
         unit_y = height / max(yCorSet)
 
     if max(xCorSet) * unit_x > width:
-        unit_x = math.floor(width / (max(xCorSet)))
+        unit_x = width / (max(xCorSet))
 
     pygame.draw.rect(surf, (255, 255, 255), pygame.Rect(plot_pos[0], plot_pos[1], width, height))
 
@@ -250,29 +416,25 @@ def drawPlotAtPos(surf, stat, xPointSet, yPointSet, plot_pos, width, height, dec
     for i in range(x_marker_amount + 1):
         marker_pos = shiftPointByPoint((step_x * i, 0), corner_bl)
         placeholder = step_x / unit_x
+        text = str(round(placeholder * i, dec_x))
+        text_pos = shiftPointByCoords(marker_pos, -4, 10)
+
 
         drawMarkerAtPoint(screen, 'vertical', 9, marker_pos)
+        drawMarkerText(screen, text, text_pos)
 
-        marker_text = small_font.render(str(round(placeholder * i, dec_x)), True, TEXT_COLOR, BG_COLOR)
-        markertextRect = marker_text.get_rect()
-        markertextRect.topleft = shiftPointByCoords(marker_pos, -4, 10)
-        surf.blit(marker_text, markertextRect)
 
     for i in range(y_marker_amount + 1):
         marker_pos = shiftPointByPoint((0, step_y * i), corner_bl)
         placeholder = step_y / unit_y
+        text = str(round(placeholder * i, dec_y))
+        text_pos = shiftPointByCoords(marker_pos, -38 - 7 * math.log(round(placeholder * i, dec_y) + 1, 10), -12)
 
         drawMarkerAtPoint(screen, 'horizontal', 9, marker_pos)
+        drawMarkerText(screen, text, text_pos)
 
-        marker_text = small_font.render(str(round(placeholder * i, dec_y)), True, TEXT_COLOR, BG_COLOR)
-        markertextRect = marker_text.get_rect()
-        markertextRect.topleft = shiftPointByCoords(marker_pos, -38 - 7 * math.log(round(placeholder * i, dec_y) + 1, 10), -12)
-        surf.blit(marker_text, markertextRect)
 
-    caption_text = small_font.render(str(stat), True, TEXT_COLOR, BG_COLOR)
-    caption_textRect = caption_text.get_rect()
-    caption_textRect.topleft = shiftPointByCoords(corner_tl, 0, -25)
-    surf.blit(caption_text, caption_textRect)
+    drawCaption(screen,str(stat), shiftPointByCoords(corner_tl, 0, -25))
 
     for i in range(len(pointSet) - 1):
         p1 = multiplyPointByNumbers(pointSet[i], unit_x, unit_y)
@@ -283,15 +445,30 @@ def drawPlotAtPos(surf, stat, xPointSet, yPointSet, plot_pos, width, height, dec
 
         pygame.draw.line(surf, (0, 0, 0), shifted_p1, shifted_p2, 2)
 
+def resetArrays(arr):
+    new_arr = []
 
-arena = Grid(40, 40)
+    for i in range(len(arr)):
+        new_arr.append([])
 
-rules = [
-    {3},
-    {2, 3}
-]
+    return new_arr
+
+
+def drawStatText(surf, text, order):
+    stat_text = font.render(text, True, TEXT_COLOR, BG_COLOR)
+    stat_text_rect = stat_text.get_rect()
+    stat_text_rect.topleft = (SIM_POS[0], text_order[order])
+
+    surf.blit(stat_text, stat_text_rect)
+
+
+arena = Grid(70, 70)
+
+rules = 'B3/S23'
+print(convRules(rules))
 play = arena.genEmptyGrid()
 game = Simulation(play, 1, 0, rules)
+
 
 screen_height = game.rows * CELL_SIZE + 300
 screen_width = game.cols * CELL_SIZE + 700
@@ -306,10 +483,14 @@ for i in range(10):
     plot_order.append(i * 250 + 50)
 
 
-
 screen = pygame.display.set_mode((screen_width, screen_height))
 screen.fill(BG_COLOR)
 pygame.display.set_caption("yep")
+
+plotter = Plotter(screen)
+
+auto_rules_button = Button(screen, 'Toggle auto', (0, 255, 0), (800, 800), 200, 100)
+reset_button = Button(screen, 'Reset', (150, 150, 150), (1050, 800), 200, 100)
 
 # play[3][5] = arena.alive
 # play[4][5] = arena.alive
@@ -318,8 +499,9 @@ pygame.display.set_caption("yep")
 
 running = True
 playing = False
-press_count = 0
-generation = 0
+auto = False
+
+stats = game.statistics()
 
 alive_y = []
 dead_y = []
@@ -328,83 +510,104 @@ avg_age_dead_y = []
 percent_alive_y = []
 generation_x = []
 
-printGrid(play)
+plot_stats = [
+    alive_y,
+    dead_y,
+    avg_age_alive_y,
+    avg_age_dead_y,
+    percent_alive_y,
+    generation_x,
+]
 
+# printGrid(play)
 while running:
 
     screen.fill(BG_COLOR)
+    game.updateRules()
 
-    stats = game.statistics()
+    if playing:
+        game.grid = game.step()
+        stats = game.statistics()
+        pygame.time.wait(20)
+
+
     alive_count = stats[0]
     dead_count = stats[1]
     avg_age_alive = round(stats[2], 2)
     avg_age_dead = round(stats[3], 2)
     percent_alive = round(stats[4], 2)
+    current_rules = stats[5]
 
-    generation_x.append(generation)
+
+    generation_x.append(game.generation)
     alive_y.append(alive_count)
     dead_y.append(dead_count)
     avg_age_alive_y.append(avg_age_alive)
     avg_age_dead_y.append(avg_age_dead)
     percent_alive_y.append(percent_alive)
 
+    if auto:
+        if percent_alive < 7.5:
+            game.ruleset = 'B3/S1245'
+
+        if percent_alive > 40:
+            game.ruleset = 'B3/S23'
+
+        auto_rules_button.color = (0, 255, 0)
+
+    else:
+        auto_rules_button.color = (255, 0, 0)
+
     # blank_text = font.render('', True, TEXT_COLOR, BG_COLOR)
 
-    alive_count_text = font.render(('Alive cells: ' + str(alive_count)), True, TEXT_COLOR, BG_COLOR)
-    alive_count_textRect = alive_count_text.get_rect()
-    alive_count_textRect.topleft = (SIM_POS[0], text_order[0])
+    drawStatText(screen, 'Alive cells: ' + str(alive_count), 0)
+    drawStatText(screen, 'Dead cells: ' + str(dead_count), 1)
+    drawStatText(screen, 'Average cell age: ' + str(avg_age_alive), 2)
+    # drawStatText(screen, 'Average cell age w/ dead cells: ' + str(avg_age_dead), 3)
+    drawStatText(screen, 'Percentage of alive cells: ' + str(percent_alive) + '%', 3)
+    drawStatText(screen, 'Current ruleset: ' + str(current_rules), 4)
 
-    dead_count_text = font.render(('Dead cells: ' + str(dead_count)), True, TEXT_COLOR, BG_COLOR)
-    dead_count_textRect = dead_count_text.get_rect()
-    dead_count_textRect.topleft = (SIM_POS[0], text_order[1])
+    auto_rules_button.drawButton()
+    reset_button.drawButton()
 
-    avg_age_alive_text = font.render(('Average cell age: ' + str(avg_age_alive)), True, TEXT_COLOR, BG_COLOR)
-    avg_age_alive_textRect = avg_age_alive_text.get_rect()
-    avg_age_alive_textRect.topleft = (SIM_POS[0], text_order[2])
-
-    avg_age_dead_text = font.render(('Average cell age w/ dead cells: ' + str(avg_age_dead)), True, TEXT_COLOR, BG_COLOR)
-    avg_age_dead_textRect = avg_age_dead_text.get_rect()
-    avg_age_dead_textRect.topleft = (SIM_POS[0], text_order[3])
-
-    percent_alive_text = font.render('Percentage of alive cells: ' + str(percent_alive) + '%', True, TEXT_COLOR, BG_COLOR)
-    percent_alive_textRect = percent_alive_text.get_rect()
-    percent_alive_textRect.topleft = (SIM_POS[0], text_order[4])
-
-    screen.blit(alive_count_text, alive_count_textRect)
-    screen.blit(dead_count_text, dead_count_textRect)
-    screen.blit(avg_age_alive_text, avg_age_alive_textRect)
-    screen.blit(avg_age_dead_text, avg_age_dead_textRect)
-    screen.blit(percent_alive_text, percent_alive_textRect)
-
-    drawPlotAtPos(screen, 'Alive cell count by generation', generation_x, alive_y, (next_to_sim, plot_order[0]), 500, 200, 0, 0)
-    drawPlotAtPos(screen, 'Percent of alive cells', generation_x, percent_alive_y, (next_to_sim, plot_order[1]), 500, 200, 0, 0)
-    drawPlotAtPos(screen, 'Average cell age by generation', generation_x, avg_age_alive_y, (next_to_sim, plot_order[2]), 500, 200, 0, 0)
+    plotter.drawPlotAtPos('Alive cell count by generation', generation_x, alive_y, (next_to_sim, plot_order[0]), 500, 200, 0, 0)
+    plotter.drawPlotAtPos('Percent of alive cells', generation_x, percent_alive_y, (next_to_sim, plot_order[1]), 500, 200, 0, 2)
+    plotter.drawPlotAtPos('Average cell age by generation', generation_x, avg_age_alive_y, (next_to_sim, plot_order[2]), 500, 200, 0, 0)
 
     game.displayGrid()
     pygame.display.update()
 
-    if playing:
-        game.grid = game.step()
-        generation += 1
-        pygame.time.wait(20)
+
 
     for event in pygame.event.get():
 
         if event.type == pygame.KEYDOWN:
+
             if event.key == pygame.K_SPACE:
-                if press_count % 2 == 1:
-                    playing = False
-                else:
-                    playing = True
-                press_count += 1
+                playing = not playing
+
+            if event.key == pygame.K_a:
+                auto = not auto
 
             if event.key == pygame.K_r:
                 game.reset()
+                stats = game.statistics()
+                generation = 0
+                alive_y = []
+                dead_y = []
+                avg_age_alive_y = []
+                avg_age_dead_y = []
+                percent_alive_y = []
+                generation_x = []
 
             if event.key == pygame.K_s:
                 game.grid = game.step()
+                stats = game.statistics()
 
-        elif pygame.mouse.get_pressed():
+            if event.key == pygame.K_f:
+                game.ruleset = str(input())
+
+        if pygame.mouse.get_pressed():
             x, y = pygame.mouse.get_pos()
 
             if pygame.mouse.get_pressed()[0]:
@@ -412,7 +615,31 @@ while running:
             elif pygame.mouse.get_pressed()[2]:
                 game.setCellAtPos(game.dead, x, y)
 
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            x, y = pygame.mouse.get_pos()
+
+            if reset_button.isClicked(x, y, pygame.mouse.get_pressed()[0]):
+                game.reset()
+                stats = game.statistics()
+                generation = 0
+                alive_y = []
+                dead_y = []
+                avg_age_alive_y = []
+                avg_age_dead_y = []
+                percent_alive_y = []
+                generation_x = []
+                playing = False
+
+            if auto_rules_button.isClicked(x, y, pygame.mouse.get_pressed()[0]):
+                auto = not auto
+
+
+
+
         if event.type == pygame.QUIT:
             running = False
+
+
+
 
 pygame.quit()
