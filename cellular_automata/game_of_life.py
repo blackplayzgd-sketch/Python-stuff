@@ -1,7 +1,6 @@
-import copy
 import pygame
 import math
-import numpy as np
+import ca_utils
 
 CELL_SIZE = 10
 ALIVE_COLOR = [255, 0, 0]
@@ -15,37 +14,9 @@ BG_COLOR = (160, 160, 160)
 TEXT_COLOR = (0, 0, 0)
 pygame.init()
 
-font = pygame.font.Font('cmunbi.ttf', 32)
-small_font = pygame.font.Font('cmunbi.ttf', 16)
-medium_font = pygame.font.Font('cmunbi.ttf', 24)
-
-
-class Grid:
-    def __init__(self, cols, rows):
-        self.cols = cols
-        self.rows = rows
-
-    def genEmptyGrid(self):
-
-        grid = []
-
-        for i in range(self.rows):
-            row = []
-
-            for j in range(self.cols):
-                row.append(0)
-
-            grid.append(row)
-
-        return grid
-
-
-def printGrid(grid):
-    for i in range(len(grid)):
-        print('')
-
-    for row in grid:
-        print(' '.join(str(i) for i in row))
+font = pygame.font.Font('../cmunbi.ttf', 32)
+small_font = pygame.font.Font('../cmunbi.ttf', 16)
+medium_font = pygame.font.Font('../cmunbi.ttf', 24)
 
 
 def convRules(ruleString):
@@ -461,12 +432,9 @@ def drawStatText(surf, text, order):
 
     surf.blit(stat_text, stat_text_rect)
 
-
-arena = Grid(70, 70)
-
-rules = 'B3/S23'
+rules = 'B4567/S1234'
 print(convRules(rules))
-play = arena.genEmptyGrid()
+play = ca_utils.genEmptyGrid((70, 70), 0)
 game = Simulation(play, 1, 0, rules)
 
 
@@ -537,7 +505,6 @@ while running:
     avg_age_dead = round(stats[3], 2)
     percent_alive = round(stats[4], 2)
     current_rules = stats[5]
-
 
     generation_x.append(game.generation)
     alive_y.append(alive_count)
